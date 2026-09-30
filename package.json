@@ -1,0 +1,11 @@
+{
+  "name": "go-mcts",
+  "version": "1.0.0",
+  "description": "Go with Chinese rules and a Monte-Carlo tree search opponent, in one dependency-free HTML file",
+  "keywords": ["go", "baduk", "weiqi", "mcts", "game", "board-game"],
+  "main": "go.html",
+  "files": ["go.html", "harness.js", "test.js", "README.md"],
+  "scripts": {
+    "test": "node test.js"
+  }
+}

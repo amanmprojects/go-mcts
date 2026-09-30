@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Go — Chinese rules</title>
+<style>
+  :root{
+    --bg:#1b1714; --panel:#262019; --line:#3a3128; --ink:#e8dfd0; --dim:#a2957f;
+    --accent:#d9a441;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.45 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+         padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:14px;margin:0;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:600}
+  main{display:flex;gap:18px;padding:18px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+  #boardWrap{position:relative;line-height:0}
+  canvas{border-radius:6px;box-shadow:0 8px 30px #0008;cursor:crosshair;max-width:100%}
+  aside{width:290px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;gap:8px}
+  .row+.row{border-top:1px solid var(--line)}
+  .lbl{color:var(--dim);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  .val{font-variant-numeric:tabular-nums;font-weight:600}
+  .stone{display:inline-block;width:13px;height:13px;border-radius:50%;vertical-align:-1px;margin-right:6px;
+         border:1px solid #0006;background-clip:padding-box}
+  button{background:#332a20;color:var(--ink);border:1px solid var(--line);border-radius:6px;
+         padding:7px 10px;font:inherit;font-size:13px;cursor:pointer}
+  button:hover:not(:disabled){background:#40352a;border-color:#584a39}
+  button:disabled{opacity:.4;cursor:default}
+  button.primary{background:var(--accent);color:#241c10;border-color:var(--accent);font-weight:600}
+  button.primary:hover:not(:disabled){background:#e7b356}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+  .btns .wide{grid-column:1/-1}
+  #moves{height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;margin-top:6px;
+         background:#1f1a14;font-variant-numeric:tabular-nums}
+  #moves div{padding:3px 8px;cursor:pointer;display:flex;gap:8px;align-items:center}
+  #moves div:nth-child(even){background:#231d16}
+  #moves div:hover{background:#3a2f23}
+  #moves div.cur{background:var(--accent);color:#241c10}
+  #moves .n{color:var(--dim);width:32px;text-align:right}
+  #moves div.cur .n{color:#6b5628}
+  #moves .c{width:13px;display:inline-block}
+  #result{margin-top:10px;padding:10px;border-radius:6px;background:#1f1a14;border:1px solid var(--line);display:none}
+  #result b{font-size:15px}
+  #result .sub{color:var(--dim);font-size:12px;margin-top:3px}
+  label.f{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;color:var(--dim);font-size:13px}
+  select,input[type=number]{background:#1f1a14;color:var(--ink);border:1px solid var(--line);
+        border-radius:5px;padding:4px 6px;font:inherit;font-size:13px}
+  input[type=number]{width:68px}
+  hr{border:0;border-top:1px solid var(--line);margin:12px 0}
+  h2{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin:0 0 4px}
+  .hint{color:var(--dim);font-size:12px;margin-top:8px}
+  kbd{background:#1f1a14;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Go · 中国规则 Chinese rules</h1>
+  <span class="lbl" id="phaseTag">Playing</span>
+</header>
+
+<main>
+  <div id="boardWrap"><canvas id="cv"></canvas></div>
+
+  <aside>
+    <div class="row"><span class="lbl">Turn</span><span class="val" id="turn"></span></div>
+    <div class="row"><span class="lbl">Move</span><span class="val" id="moveNo">0</span></div>
+    <div class="row"><span class="lbl">Captures</span><span class="val" id="caps">0 – 0</span></div>
+    <div class="row"><span class="lbl">Last move</span><span class="val" id="lastMove">—</span></div>
+    <div class="row"><span class="lbl">Komi</span><span class="val" id="komiV">7.5</span></div>
+
+    <div class="btns">
+      <button id="btnPass">Pass</button>
+      <button id="btnUndo">Undo</button>
+      <button id="btnResign">Resign</button>
+      <button id="btnNew">New game</button>
+      <button id="btnCount" class="wide primary" hidden>Count score</button>
+      <button id="btnSgf" class="wide">Export SGF</button>
+    </div>
+
+    <div id="result"></div>
+
+    <hr>
+    <h2>Setup</h2>
+    <label class="f">Board
+      <select id="selSize">
+        <option value="9">9 × 9</option>
+        <option value="13">13 × 13</option>
+        <option value="19" selected>19 × 19</option>
+      </select></label>
+    <label class="f">Handicap
+      <select id="selHc">
+        <option value="0" selected>Even</option>
+        <option value="2">2</option><option value="3">3</option><option value="4">4</option>
+        <option value="5">5</option><option value="6">6</option><option value="7">7</option>
+        <option value="8">8</option><option value="9">9</option>
+      </select></label>
+    <label class="f">Komi <input type="number" id="inKomi" value="7.5" step="0.5"></label>
+    <label class="f">Opponent
+      <select id="selBot">
+        <option value="0" selected>Human</option>
+        <option value="2">Bot plays White</option>
+        <option value="1">Bot plays Black</option>
+        <option value="3">Bot plays both</option>
+      </select></label>
+    <label class="f">Bot strength
+      <select id="selLevel" disabled>
+        <option value="0">Casual</option>
+        <option value="1" selected>Strong</option>
+        <option value="2">Best</option>
+      </select></label>
+    <button id="btnApply" class="wide" style="width:100%;margin-top:8px">Restart</button>
+
+    <hr>
+    <h2>Moves</h2>
+    <div id="moves"></div>
+    <p class="hint">
+      <kbd>U</kbd> undo · <kbd>P</kbd> pass · <kbd>Enter</kbd> count score · <kbd>Esc</kbd> back<br>
+      Undo also takes back the bot's reply. Scoring: click a group to mark it
+      dead, click again to revive.
+    </p>
+  </aside>
+</main>
+
+<script>
+"use strict";
+
+/* ── state ────────────────────────────────────────────────────────────── */
+const EMPTY=0, BLACK=1, WHITE=2;
+const OPP = c => c===BLACK ? WHITE : BLACK;
+const COLS = "ABCDEFGHJKLMNOPQRST";          // "I" skipped, per convention
+
+let N=19;
+let board=[], toPlay=BLACK, caps={1:0,2:0}, komi=7.5, handicap=0;
+let moveNo=0, koPoint=-1, passStreak=0, posKey="", seen=new Set();
+let phase="play";                            // play | score | over
+let dead=new Set();                          // stone indices marked dead while scoring
+let outcome=null;                            // {text, detail}
+let history=[], review=-1, hover=-1;
+let initState=null;                 // position before the first move (handicap applied)
+let hcpStones=[];                            // handicap stone indices
+let flashText="", flashUntil=0;
+
+const starPoints = n => ({
+  9:[[2,2],[6,2],[2,6],[6,6],[4,4]],
+  13:[[3,3],[9,3],[6,3],[3,6],[9,6],[6,6],[3,9],[9,9],[6,9]],
+  19:[[3,3],[15,3],[9,3],[3,9],[15,9],[9,9],[3,15],[15,15],[9,15]]
+}[n]) || [];
+
+// Handicap stones in the usual order: the two lower corners, then the two
+// upper, then the centre, then the sides, then the remaining side points.
+// Listed explicitly per board size because a 9x9 has only five of them.
+const handicapLayout = n => ({
+  9:[[2,6],[6,6],[2,2],[6,2],[4,4]],
+  13:[[3,9],[9,9],[3,3],[9,3],[6,6],[3,6],[9,6],[6,9],[6,3]],
+  19:[[3,15],[15,15],[3,3],[15,3],[9,9],[3,9],[15,9],[9,15],[9,3]]
+}[n]) || [];
+
+/* ── rules engine ─────────────────────────────────────────────────────── */
+const key   = b => b.join("");
+const xy    = i => [i%N, (i/N)|0];
+const idx   = (x,y) => y*N+x;
+const onBoard = (x,y) => x>=0 && y>=0 && x<N && y<N;
+
+function neighbours(i){
+  const x=i%N, y=(i/N)|0, r=[];
+  if(x>0)   r.push(i-1);
+  if(x<N-1) r.push(i+1);
+  if(y>0)   r.push(i-N);
+  if(y<N-1) r.push(i+N);
+  return r;
+}
+
+/** Flood-fill the chain containing i: {stones:[...], liberties:Set}. */
+function group(b, i){
+  const col=b[i], stones=[i], libs=new Set(), visited=new Set([i]), stack=[i];
+  while(stack.length){
+    for(const n of neighbours(stack.pop())){
+      if(b[n]===EMPTY) libs.add(n);
+      else if(b[n]===col && !visited.has(n)){ visited.add(n); stones.push(n); stack.push(n); }
+    }
+  }
+  return {stones, liberties:libs};
+}
+
+/** Place at i and lift captured enemy chains. Assumes the move is legal. */
+function placeOn(b, i, col){
+  b[i]=col;
+  const captured=[];
+  for(const n of neighbours(i)){
+    if(b[n]===OPP(col)){
+      const g=group(b,n);
+      if(g.liberties.size===0) for(const s of g.stones){ b[s]=EMPTY; captured.push(s); }
+    }
+  }
+  return {captured, ko: captured.length===1 ? captured[0] : -1};
+}
+
+/** null if legal, otherwise a short reason. Chinese rules: no suicide, no
+ *  simple ko, and no repeating any earlier position (positional superko). */
+function illegal(b, i, col, ko, seenSet){
+  if(b[i]!==EMPTY) return "occupied";
+  if(i===ko) return "ko";
+  const t=b.slice();
+  placeOn(t,i,col);
+  if(group(t,i).liberties.size===0) return "suicide";
+  if(seenSet.has(key(t))) return "superko";
+  return null;
+}
+
+const snapshot = () => ({
+  board:board.slice(), toPlay, caps:{...caps}, koPoint, passStreak,
+  posKey, moveNo, phase, outcome
+});
+
+function restore(s){
+  board=s.board.slice(); toPlay=s.toPlay; caps={...s.caps}; koPoint=s.koPoint;
+  passStreak=s.passStreak; posKey=s.posKey; moveNo=s.moveNo;
+  phase=s.phase; outcome=s.outcome;
+}
+
+/** The point played by the move that snapshot k recorded. history[k] is the
+ *  position *before* its move, so the move is the difference between that and
+ *  the position that followed — which is history[k+1], or the live board for
+ *  the last one. -1 for a pass. */
+function playedIndex(k){
+  const before=history[k].board;
+  const after = (k+1<history.length) ? history[k+1].board : board;
+  for(let i=0;i<before.length;i++) if(after[i]!==EMPTY && before[i]===EMPTY) return i;
+  return -1;
+}
+
+// Chinese komi by board size. 7.5 is a 19x19 value; on a 9x9 it is 9% of the
+// board, big enough that the bot correctly concludes the game is lost and
+// passes it out on move three.
+const defaultKomi = n => ({9:5.5, 13:7.5, 19:7.5}[n] ?? 7.5);
+function syncKomi(){
+  document.getElementById("inKomi").value = defaultKomi(+document.getElementById("selSize").value);
+}
+document.getElementById("selSize").onchange=syncKomi;
+
+function newGame(){
+  N=+document.getElementById("selSize").value;
+  const selHc=document.getElementById("selHc");
+  komi=parseFloat(document.getElementById("inKomi").value)||0;
+  handicap=+document.getElementById("selHc").value;
+
+  board=new Array(N*N).fill(EMPTY);
+  toPlay=BLACK; caps={1:0,2:0}; koPoint=-1; passStreak=0; moveNo=0;
+  phase="play"; dead=new Set(); outcome=null; history=[]; review=-1;
+  hcpStones=[];
+
+  if(handicap>=2){
+    // A 9x9 has only five handicap points, so clamp and reflect that in the UI.
+    const layout=handicapLayout(N);
+    handicap=Math.min(handicap, layout.length);
+    selHc.value=String(handicap);
+    hcpStones=layout.slice(0,handicap).map(([x,y])=>idx(x,y));
+    for(const i of hcpStones) board[i]=BLACK;
+    toPlay=WHITE;
+  }
+  posKey=key(board);
+  initState={board:board.slice(), toPlay, caps:{...caps}, koPoint:-1, passStreak:0,
+             posKey, moveNo:0, phase:"play", outcome:null};
+  seen=new Set([posKey]);
+  document.getElementById("result").style.display="none";
+  document.getElementById("moves").innerHTML="";
+  cancelBot();
+  afterMove();
+}
+
+function play(i){
+  // isBotTurn() also blocks the board when the bot owns this colour, so a
+  // move can never slip in on its turn between searches.
+  // isBotTurn() stops the board being played on the bot's colour; bot.moving
+  // is the exception, since that is the bot placing its own stone.
+  if(phase!=="play" || review!==-1 || i<0 || bot.running ||
+     (isBotTurn() && !bot.moving)) return;
+  const why=illegal(board,i,toPlay,koPoint,seen);
+  if(why){ flash(why); return; }
+
+  history.push(snapshot());
+  const col=toPlay;
+  const {captured, ko}=placeOn(board,i,col);
+  caps[col]+=captured.length;
+  koPoint=ko;
+  posKey=key(board);
+  seen.add(posKey);
+  moveNo++; passStreak=0;
+  toPlay=OPP(col);
+  afterMove();
+}
+
+function pass(){
+  if(phase!=="play" || review!==-1) return;
+  history.push(snapshot());
+  moveNo++; passStreak++; toPlay=OPP(toPlay);
+  if(passStreak>=2){ phase="score"; dead=new Set(); }
+  afterMove();
+}
+
+function undo(){
+  if(review!==-1){ review--; if(review<0) review=-1; render(); return; }
+  cancelBot();
+  if(!history.length) return;
+  // Each snapshot is the position *before* its move, so popping the last one
+  // and restoring it takes back exactly one move — including one of the pair
+  // of passes that would have ended the game. Against the bot, take back its
+  // reply too, so the human's own move can be changed.
+  const last=history[history.length-1].toPlay;
+  const wasBot = bot.side!==0 && (bot.side===3 || last===bot.side);
+  const take   = (wasBot && history.length>=2) ? 2 : 1;
+  for(let k=0;k<take && history.length;k++) restore(history.pop());
+  if(!history.length) restore(initState);
+  // Rebuild the repetition history: only positions still on the book are legal.
+  seen=new Set([initState.posKey, ...history.map(h=>h.posKey), posKey]);
+  dead=new Set();
+  outcome=null;
+  phase="play";
+  document.getElementById("result").style.display="none";
+  afterMove();
+}
+
+function resign(){
+  if(phase!=="play" || review!==-1) return;
+  history.push(snapshot());
+  phase="over";
+  const loser=toPlay===BLACK?"White":"Black";
+  outcome={text:`${loser} wins by resignation`, detail:"", resign:true};
+  showOutcome();
+}
+
+function flash(msg){ flashText=msg; flashUntil=performance.now()+1500; render(); }
+
+/* ── scoring: Chinese area scoring ────────────────────────────────────── */
+function toggleDead(i){
+  if(phase!=="score" || i<0) return;
+  if(board[i]===EMPTY){ flash("click a stone to mark its group"); return; }
+  const g=group(board,i);
+  const allDead=g.stones.every(s=>dead.has(s));
+  for(const s of g.stones) allDead ? dead.delete(s) : dead.add(s);
+  render();
+}
+
+const cleanedBoard = () => { const b=board.slice(); for(const i of dead) b[i]=EMPTY; return b; };
+
+/** Chinese area count of an arbitrary position: stones and territory per side.
+ *  A region touching only one colour is that colour's territory; anything
+ *  touching both (or neither) is neutral. */
+function scoreOn(b){
+  const terr=[0,0,0], stones=[0,0,0], counted=new Uint8Array(b.length);
+  for(let i=0;i<b.length;i++){
+    if(b[i]!==EMPTY || counted[i]) continue;
+    let size=0;
+    const border=new Set(), visited=new Set([i]), stack=[i];
+    while(stack.length){
+      const c=stack.pop(); size++; counted[c]=1;
+      for(const n of neighbours(c)){
+        if(b[n]===EMPTY){ if(!visited.has(n)){ visited.add(n); stack.push(n); } }
+        else border.add(b[n]);
+      }
+    }
+    terr[border.size===1 ? (border.has(BLACK)?0:1) : 2]+=size;
+  }
+  for(const v of b) if(v===BLACK) stones[0]++; else if(v===WHITE) stones[1]++;
+  return {terr, stones};
+}
+
+function scoreGame(){
+  const {terr, stones}=scoreOn(cleanedBoard());
+  const black=terr[0]+stones[0]+komi, white=terr[1]+stones[1];
+  return {terr, stones, black, white, winner:black>white?"Black":"White", margin:Math.abs(black-white)};
+}
+
+/** Black-minus-white area of a position, komi included. The bot's yardstick. */
+function areaDiff(b){
+  const {terr, stones}=scoreOn(b);
+  return terr[0]+stones[0]+komi - (terr[1]+stones[1]);
+}
+
+function showOutcome(){
+  const el=document.getElementById("result");
+  if(outcome.resign){
+    el.innerHTML=`<b>${outcome.text}</b><div class="sub">${N}×${N} · ${moveNo} moves · komi ${komi}</div>`;
+  }else{
+    const s=scoreGame();
+    el.innerHTML=`<b>${s.winner} wins by ${s.margin.toFixed(1)}</b>`+
+      `<div class="sub">Black ${s.black.toFixed(1)} · White ${s.white.toFixed(1)}`+
+      `<br>stones ${s.stones[0]}–${s.stones[1]} · territory ${s.terr[0]}–${s.terr[1]}`+
+      `${dead.size?` · ${dead.size} marked dead`:""}</div>`;
+  }
+  el.style.display="block";
+}
+
+function countScore(){
+  outcome=scoreGame();
+  outcome.resign=false;
+  phase="over";
+  showOutcome();
+  render();
+}
+
+/* ── SGF ──────────────────────────────────────────────────────────────── */
+const sgfCoord = i => { const [x,y]=xy(i); return COLS[x]+(N-y); };
+
+/** Serialise the game. history[k].toPlay is the player who made move k+1,
+ *  so each snapshot supplies both the colour and the point. */
+function sgfText(){
+  const recs=history.map((h,k)=>{
+    const who = h.toPlay===BLACK ? "B" : "W";
+    const p = playedIndex(k);
+    return ";"+who+(p<0 ? "[]" : "["+sgfCoord(p)+"]");
+  });
+  const ab=hcpStones.map(i=>"AB"+sgfCoord(i)).join("");
+  const dt=new Date().toISOString().slice(0,10);
+  return "[GM[1]FF[4]CA[UTF-8]AP[Go/Chinese]SZ["+N+"]KM["+komi+"]RU[Chinese]"+
+         (handicap>=2 ? "HA["+handicap+"]" : "")+ab+
+         "PB[Black]PW[White]DT["+dt+"]]"+     // second ] closes the root node
+         recs.join("")+"\n";
+}
+
+function exportSGF(){
+  const sgf=sgfText();
+  const dt=new Date().toISOString().slice(0,10);
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([sgf],{type:"application/x-go-sgf"}));
+  a.download=`go-${N}x${N}-${dt}.sgf`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+/* ── computer opponent ────────────────────────────────────────────────────
+   Monte-Carlo tree search with heuristic playouts, run in animation-frame
+   slices so the board stays interactive while it thinks.
+
+   Playouts honour the ko point but ignore positional superko: tracking
+   repetition means hashing every position in every playout, and cycles
+   essentially never appear in a random game. The move the bot finally plays
+   is checked against the real superko set like any other move.
+
+   Everything on the hot path — flood fill, capture, legality — works through
+   preallocated scratch buffers. group() above is fine for the handful of
+   calls a real move needs, but the playout loop runs it tens of thousands of
+   times per second and cannot afford to allocate. */
+const BOT_LEVELS=[
+  {name:"Casual", ms:700,  minPlays:120, c:1.5},
+  {name:"Strong", ms:2200, minPlays:400, c:1.0},
+  {name:"Best",   ms:6000, minPlays:900, c:0.8}
+];
+
+const bot={side:0, level:1, running:false, plays:0, tree:null, colour:BLACK,
+           treeBoard:null, rootBoard:null, ko:-1, started:0, moving:false,
+           seed:987654321};
+const rnd=()=>((bot.seed=(bot.seed*1103515245+12345)&0x7fffffff)/0x7fffffff);
+const isBotTurn=()=> bot.side!==0 && phase==="play" && review===-1 &&
+                     (bot.side===3 || bot.side===toPlay);
+
+/* scratch buffers, rebuilt whenever the board size changes */
+let _n=null,_nbr=null,_mark=null,_stack=null,_grp=null,_grpN=0,_rem=null,_stamp=0;
+function botScratch(n){
+  const need=n*n;
+  if(_n===n) return;
+  _n=n;
+  _mark=new Int32Array(need); _stack=new Int32Array(need);
+  _grp =new Int32Array(need); _rem =new Int32Array(need);
+  _nbr =new Int32Array(need*4);
+  for(let i=0;i<need;i++){
+    const x=i%n, y=(i/n)|0;
+    _nbr[i*4]=x>0   ? i-1 : -1;
+    _nbr[i*4+1]=x<n-1 ? i+1 : -1;
+    _nbr[i*4+2]=y>0   ? i-n : -1;
+    _nbr[i*4+3]=y<n-1 ? i+n : -1;
+  }
+}
+
+/** Flood the chain at i into _grp[0.._grpN); return its liberty count. */
+function flood(b,i){
+  const col=b[i];
+  _stamp++;
+  const st=_stamp;
+  let sp=0, libs=0;
+  _stack[sp++]=i; _mark[i]=st; _grpN=0;
+  while(sp>0){
+    const c=_stack[--sp], o=c*4;
+    _grp[_grpN++]=c;
+    for(let k=0;k<4;k++){
+      const n=_nbr[o+k];
+      if(n<0) continue;
+      const v=b[n];
+      if(v===EMPTY){ if(_mark[n]!==st){ _mark[n]=st; libs++; } }
+      else if(v===col && _mark[n]!==st){ _mark[n]=st; _stack[sp++]=n; }
+    }
+  }
+  return libs;
+}
+
+/** Place at i for real, lifting captured chains. Returns the ko point. */
+function playFast(b,i,col){
+  const foe=OPP(col);
+  b[i]=col;
+  let caps=0, remN=0;
+  const o=i*4;
+  for(let k=0;k<4;k++){
+    const n=_nbr[o+k];
+    if(n<0 || b[n]!==foe) continue;
+    if(flood(b,n)===0){
+      for(let t=0;t<_grpN;t++){ const s=_grp[t]; b[s]=EMPTY; _rem[remN++]=s; }
+      caps+=_grpN;
+    }
+  }
+  return caps===1 ? _rem[0] : -1;
+}
+
+/** Play at i, measure it, and put the board back exactly as it was. */
+function probeMove(b,i,col){
+  const foe=OPP(col);
+  b[i]=col;
+  let caps=0, remN=0;
+  const o=i*4;
+  for(let k=0;k<4;k++){
+    const n=_nbr[o+k];
+    if(n<0 || b[n]!==foe) continue;
+    if(flood(b,n)===0){
+      for(let t=0;t<_grpN;t++){ const s=_grp[t]; b[s]=EMPTY; _rem[remN++]=s; }
+      caps+=_grpN;
+    }
+  }
+  const libs=flood(b,i);
+  b[i]=EMPTY;
+  for(let t=0;t<remN;t++) b[_rem[t]]=foe;
+  return {libs, caps};
+}
+
+/** Play at i, report whether that position has occurred before, then put
+ *  the board back exactly as it was. */
+function probeRepeat(b,i,col,seen){
+  const foe=OPP(col);
+  b[i]=col;
+  let remN=0;
+  const o=i*4;
+  for(let k=0;k<4;k++){
+    const n=_nbr[o+k];
+    if(n<0 || b[n]!==foe) continue;
+    if(flood(b,n)===0)
+      for(let t=0;t<_grpN;t++){ const s=_grp[t]; b[s]=EMPTY; _rem[remN++]=s; }
+  }
+  const repeats=seen.has(key(b));
+  b[i]=EMPTY;
+  for(let t=0;t<remN;t++) b[_rem[t]]=foe;
+  return repeats;
+}
+
+const MAX_ROOT=40;      // cap on how many root moves are considered
+
+/** Empty points touching a stone. */
+function frontier(b, ko){
+  const out=[];
+  for(let i=0;i<b.length;i++){
+    if(b[i]!==EMPTY || i===ko) continue;
+    const o=i*4;
+    for(let k=0;k<4;k++){ const n=_nbr[o+k]; if(n>=0 && b[n]!==EMPTY){ out.push(i); break; } }
+  }
+  return out;
+}
+
+/** A sane set of opening points: each star point, plus the 4-4 diagonally
+ *  inward from it. An empty board offers no frontier at all, so without this
+ *  the bot would have nothing to consider. */
+function openingPoints(){
+  const out=[], seenP=new Set();
+  for(const [x,y] of starPoints(N)){
+    const dx=x<(N-1)/2?1:-1, dy=y<(N-1)/2?1:-1;
+    for(const [a,b2] of [[x,y],[x+dx,y+dy],[x+dx,y],[x,y+dy]]){
+      if(!onBoard(a,b2)) continue;
+      const i=idx(a,b2);
+      if(!seenP.has(i)){ seenP.add(i); out.push(i); }
+    }
+  }
+  return out;
+}
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){ const j=(rnd()*(i+1))|0, t=a[i]; a[i]=a[j]; a[j]=t; }
+  return a;
+}
+
+/** Moves to consider at the root. Kept deliberately small: the search spreads
+ *  its playouts over whatever it is given, so offering every empty point on a
+ *  19x19 leaves each one a handful of playouts and the choice is noise. */
+function rootMoves(b, col, ko, seen){
+  let stones=0;
+  for(let i=0;i<b.length;i++) if(b[i]!==EMPTY) stones++;
+  let cands = stones===0 ? openingPoints() : frontier(b,ko);
+  if(cands.length>MAX_ROOT) cands=shuffle(cands.slice()).slice(0,MAX_ROOT);
+  const out=[];
+  for(const i of cands){
+    if(b[i]!==EMPTY || i===ko) continue;
+    if(probeMove(b,i,col).libs===0) continue;           // suicide
+    if(seen && probeRepeat(b,i,col,seen)) continue;      // positional superko
+    out.push(i);
+  }
+  shuffle(out);
+  // Passing is a real move, but only once the board is far enough along that
+  // giving up the rest of the game is on the table. Before that the search
+  // will happily take the pass branch and end a nearly empty game.
+  if(stones>=N) out.push(-1);
+  return out;
+}
+
+/** Legal moves for a deeper tree node: the frontier only, which keeps the
+ *  branching factor down. Pass is -1. */
+function genMoves(b, col, ko){
+  const out=[];
+  for(const i of frontier(b,ko))
+    if(probeMove(b,i,col).libs>0) out.push(i);
+  shuffle(out);
+  out.push(-1);
+  return out;
+}
+
+/** How good is this point for `col`, by cheap local reasoning. Steers
+ *  playouts: take captures, rescue groups in atari, never fill your own eye
+ *  or walk into self-atari when there is a better alternative. */
+function moveScore(b,i,col){
+  const o=i*4;
+  let own=0, touchEnemy=false, slots=0;
+  for(let k=0;k<4;k++){
+    const n=_nbr[o+k];
+    if(n<0) continue;
+    slots++;
+    if(b[n]===EMPTY) continue;
+    if(b[n]===col) own++; else touchEnemy=true;
+  }
+  const ownEye = !touchEnemy && own===slots;   // every neighbour is our own stone
+  const p=probeMove(b,i,col);
+  if(p.libs===0) return -Infinity;                       // suicide
+  let s=rnd()*25;
+  if(p.caps) s+=40+15*p.caps;
+  if(p.libs===1) s-=200; else if(p.libs===2) s-=10;
+  if(ownEye) s-=400;                                     // filling a real eye
+  else if(!touchEnemy && own>=1) s-=260;                // inside our own area
+
+  // Atari rescue and attack are the expensive part — four more flood fills —
+  // so only bother for moves that are not already ruled out. Filling your own
+  // eye is correct when the eye is the last liberty of a group in atari.
+  if(s>-200){
+    let friendAtari=false, enemyAtari=false;
+    for(let k=0;k<4;k++){
+      const n=_nbr[o+k];
+      if(n<0 || b[n]===EMPTY) continue;
+      const libs=flood(b,n);
+      if(b[n]===col){ if(libs<=1) friendAtari=true; }
+      else if(libs===1) enemyAtari=true;
+    }
+    if(enemyAtari) s+=30;
+    if(friendAtari) s+=40+400;      // this move is filling our own eye to live
+  }
+  return s;
+}
+
+  /** One playout move: the best of a few points drawn from every empty point
+   *  on the board, scored by moveScore. Drawn from all of them rather than
+   *  only points touching a stone — otherwise an empty board offers no
+   *  candidate at all and the playout passes straight through. */
+function policyMove(b, col, ko){
+  const open=[];
+  for(let i=0;i<b.length;i++) if(b[i]===EMPTY && i!==ko) open.push(i);
+  if(!open.length) return -1;
+  let best=-1, bestScore=-Infinity;
+  for(let t=0;t<4;t++){
+    const i=open[(rnd()*open.length)|0];
+    const sc=moveScore(b,i,col);
+    if(sc>bestScore){ bestScore=sc; best=i; }
+  }
+  // Nothing worth playing: pass, so the playout ends on a real position
+  // instead of running to the ply limit with the board half settled.
+  return bestScore < -120 ? -1 : best;
+}
+
+/** Black-minus-white area of a position, komi included — the bot's yardstick.
+ *  Allocation-free twin of scoreOn() above. */
+function fastArea(b){
+  let black=0, white=0;
+  for(let i=0;i<b.length;i++) if(b[i]===BLACK) black++; else if(b[i]===WHITE) white++;
+  for(let i=0;i<b.length;i++){
+    if(b[i]!==EMPTY) continue;
+    _stamp++;
+    const st=_stamp;
+    let sp=0, size=0, mask=0;
+    _stack[sp++]=i; _mark[i]=st;
+    while(sp>0){
+      const c=_stack[--sp], o=c*4;
+      size++;
+      for(let k=0;k<4;k++){
+        const n=_nbr[o+k];
+        if(n<0) continue;
+        const v=b[n];
+        if(v===EMPTY){ if(_mark[n]!==st){ _mark[n]=st; _stack[sp++]=n; } }
+        else mask |= v;
+      }
+    }
+    if(mask===BLACK) black+=size;
+    else if(mask===WHITE) white+=size;
+  }
+  return black+komi-white;
+}
+
+/** Play the position out to the end. */
+function playout(b, col, ko){
+  const maxPly=2*b.length+40;
+  let passes=0, moves=0;
+  while(passes<2 && moves<maxPly){
+    const i=policyMove(b,col,ko);
+    if(i<0){ passes++; ko=-1; }
+    else { ko=playFast(b,i,col); passes=0; moves++; }
+    col=OPP(col);
+  }
+  return fastArea(b);
+}
+
+const newNode = () => ({cands:null, tried:0, children:new Map(), visits:0, wins:0, move:undefined});
+const newChild = (node,move) => { const ch=newNode(); ch.move=move; node.children.set(move,ch); return ch; };
+
+function uctPick(node,c){
+  let best=null, bestVal=-Infinity;
+  for(const ch of node.children.values()){
+    // An untried move must be tried before any is judged, so give it the top
+    // slot; 0/0 would otherwise make the whole comparison NaN and stop the
+    // search dead.
+    const v = ch.visits===0 ? Infinity
+            : ch.wins/ch.visits + c*Math.sqrt(Math.log(node.visits+1)/ch.visits);
+    if(v>bestVal){ bestVal=v; best=ch; }
+  }
+  return best;
+}
+
+/** One iteration: descend from the root, expanding as we go, then simulate
+ *  from the node we stopped at and back the result up that path. */
+function runPlayout(){
+  const c=BOT_LEVELS[bot.level].c;
+  const b=bot.rootBoard.slice();      // the descent and playout consume it
+  let node=bot.tree, col=bot.colour, ko=bot.ko;
+  const path=[];
+
+  for(;;){
+    if(node.cands===null)
+      node.cands = node===bot.tree ? rootMoves(b,col,ko,seen) : genMoves(b,col,ko);
+    let applied=null, expanded=false;
+    while(node.tried<node.cands.length){
+      const m=node.cands[node.tried++];
+      if(!node.children.has(m)){ applied=m; expanded=true; break; }
+    }
+    if(expanded){ node=newChild(node,applied); path.push(node); }
+    else{
+      const ch=uctPick(node,c);
+      if(!ch) break;
+      applied=ch.move; path.push(ch); node=ch;
+    }
+    ko = applied<0 ? -1 : playFast(b,applied,col);
+    col = OPP(col);
+    if(expanded) break;
+  }
+
+  const from   = bot.colour===BLACK ? playout(b,col,ko) : -playout(b,col,ko);
+  const reward = 1/(1+Math.exp(-from/6));      // margin squashed into 0..1
+  for(const n of path){ n.visits++; n.wins+=reward; }
+  bot.tree.visits++;
+  bot.plays++;
+}
+
+/** Point the search at the current position, reusing the previous subtree
+ *  when the bot is playing into the same game it just searched. */
+function prepareBot(){
+  botScratch(N);
+  if(bot.tree && key(bot.treeBoard)===key(board)){
+    // Same position: keep the statistics, just relist the root's moves.
+    bot.tree.cands=null; bot.tree.tried=0;
+    // A re-rooted node's children were generated by genMoves, which always
+    // offers a pass. Relisting the candidates does not remove that child, so
+    // on a board too empty for a pass to make sense it has to go explicitly.
+    let placed=0;
+    for(let i=0;i<board.length;i++) if(board[i]!==EMPTY) placed++;
+    if(placed<N) bot.tree.children.delete(-1);
+  }else{
+    bot.tree=newNode();
+  }
+  bot.treeBoard=board.slice();
+  bot.rootBoard=bot.treeBoard;
+  bot.ko=koPoint; bot.colour=toPlay; bot.plays=0; bot.started=0;
+  bot.seed=((Date.now()&0x7fffffff)||1);
+}
+
+function startBot(){
+  if(bot.running || !isBotTurn()) return;
+  prepareBot();
+  bot.running=true;
+  botTick();
+}
+
+function botTick(){
+  if(!bot.running) return;
+  const lvl=BOT_LEVELS[bot.level];
+  const started=bot.started || (bot.started=performance.now());
+  // Roughly ten milliseconds of searching, then hand the frame back so the
+  // board redraws and the page stays responsive for the whole budget.
+  const slice=performance.now();
+  while(bot.plays<lvl.minPlays || performance.now()-slice<10) runPlayout();
+  if(bot.plays>=lvl.minPlays && performance.now()-started>=lvl.ms){
+    bot.started=0;
+    finishBot();
+    return;
+  }
+  render();
+  // A timer rather than requestAnimationFrame: rAF stops in a background tab,
+  // which would leave the search frozen until the tab came back.
+  setTimeout(botTick, 0);
+}
+
+/** Play the search's choice, and re-root the tree on the move actually made
+ *  so the next move inherits what was learned. The search and play() agree on
+ *  legality in principle; if a move is refused anyway, fall through to the
+ *  next-best one rather than stall the game. */
+function playBotMove(){
+  const order=[...bot.tree.children.values()].sort((a,b)=>b.visits-a.visits);
+  for(const ch of order.slice(0,8)){            // best first, but keep trying
+    const n=history.length;
+    if(ch.move<0) pass(); else play(ch.move);
+    if(history.length>n){ bot.tree = ch.visits>=8 ? ch : null; return ch.move; }
+  }
+  // Nothing the search wanted could be played. Passing keeps the game moving
+  // and is legal; refusing to move would leave the board stuck on the bot.
+  pass();
+  bot.tree=null;
+  return -1;
+}
+
+function finishBot(){
+  bot.running=false;      // the search is over...
+  bot.moving=true;        // ...but this next move is the bot's own
+  const mv=playBotMove();
+  bot.moving=false;
+  if(bot.tree) bot.treeBoard=board.slice();   // the position that tree now holds
+  return mv;
+}
+
+function cancelBot(){ bot.running=false; bot.tree=null; }
+function afterMove(){ if(isBotTurn()) startBot(); else render(); }
+
+/* ── rendering ────────────────────────────────────────────────────────── */
+const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
+let geo={pad:0,cell:0,w:0};
+const dispName = i => { const [x,y]=xy(i); return COLS[x]+(N-y); };
+
+function layout(){
+  const size=Math.min(640, Math.max(300, window.innerWidth-360), window.innerHeight-118);
+  // The margin has to hold a stone radius plus the coordinate labels, or the
+  // edge stones overlap the numbers on the smaller boards.
+  const dpr=window.devicePixelRatio||1, pad=size*0.09, cell=(size-2*pad)/(N-1);
+  cv.width=Math.round(size*dpr); cv.height=Math.round(size*dpr);
+  cv.style.width=size+"px"; cv.style.height=size+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  geo={pad,cell,w:size};
+}
+const px = x => geo.pad + x*geo.cell;
+
+function render(){
+  layout();
+  const W=geo.w, b=viewBoard();
+
+  const base=ctx.createLinearGradient(0,0,W,W);
+  base.addColorStop(0,"#e6bd70"); base.addColorStop(.55,"#dcae5e"); base.addColorStop(1,"#cf9c4c");
+  ctx.fillStyle=base; ctx.fillRect(0,0,W,W);
+  const sheen=ctx.createRadialGradient(W*.38,W*.32,8,W/2,W/2,W*.8);
+  sheen.addColorStop(0,"rgba(255,244,214,.38)"); sheen.addColorStop(1,"rgba(92,60,18,.20)");
+  ctx.fillStyle=sheen; ctx.fillRect(0,0,W,W);
+
+  ctx.strokeStyle="#4a3418"; ctx.lineWidth=Math.max(.7,geo.cell*.035);
+  ctx.beginPath();
+  for(let i=0;i<N;i++){
+    ctx.moveTo(px(0),px(i)); ctx.lineTo(px(N-1),px(i));
+    ctx.moveTo(px(i),px(0)); ctx.lineTo(px(i),px(N-1));
+  }
+  ctx.stroke();
+  ctx.strokeStyle="#3a2810"; ctx.lineWidth=Math.max(1,geo.cell*.055);
+  ctx.strokeRect(px(0),px(0),px(N-1)-px(0),px(N-1)-px(0));
+
+  ctx.fillStyle="#3a2810";
+  for(const [x,y] of starPoints(N)){
+    ctx.beginPath(); ctx.arc(px(x),px(y),Math.max(1.6,geo.cell*.075),0,7); ctx.fill();
+  }
+
+  ctx.fillStyle="#75551f"; ctx.font=`${Math.max(9,geo.cell*.42)}px ui-sans-serif,system-ui,sans-serif`;
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  for(let i=0;i<N;i++){
+    ctx.fillText(COLS[i],px(i),geo.pad*.38);
+    ctx.fillText(COLS[i],px(i),W-geo.pad*.38);
+    ctx.fillText(String(N-i),geo.pad*.38,px(i));
+    ctx.fillText(String(N-i),W-geo.pad*.38,px(i));
+  }
+
+  const scoring = phase==="score" && review===-1;
+  const r=geo.cell*(phase==="score"?0.45:0.475);
+  for(let i=0;i<N*N;i++)
+    if(b[i]!==EMPTY) drawStone(px(i%N),px((i/N)|0), r, b[i]===BLACK, scoring&&dead.has(i));
+
+  const lm=viewLastMove();
+  if(lm>=0 && phase!=="over" && !outcome?.resign){
+    const [lx,ly]=xy(lm);
+    ctx.strokeStyle="#e0402c"; ctx.lineWidth=Math.max(1.4,geo.cell*.06);
+    ctx.beginPath();
+    ctx.moveTo(px(lx)-r*.45,px(ly)); ctx.lineTo(px(lx)+r*.45,px(ly));
+    ctx.moveTo(px(lx),px(ly)-r*.45); ctx.lineTo(px(lx),px(ly)+r*.45);
+    ctx.stroke();
+  }
+
+  if(hover>=0 && phase==="play" && review===-1 && board[hover]===EMPTY){
+    const [hx,hy]=xy(hover);
+    ctx.globalAlpha=.4;
+    drawStone(px(hx),px(hy),r,toPlay===BLACK,false);
+    ctx.globalAlpha=1;
+  }
+
+  if(performance.now()<flashUntil && flashText){
+    ctx.font="600 12px ui-sans-serif,system-ui,sans-serif";
+    ctx.textAlign="left"; ctx.textBaseline="middle";
+    const w=ctx.measureText(flashText).width+18;
+    ctx.fillStyle="#000c"; ctx.fillRect(8,8,w,24);
+    ctx.fillStyle="#fff"; ctx.fillText(flashText,17,20);
+  }
+  updatePanel();
+}
+
+function drawStone(cx,cy,r,isBlack,isDead){
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx+r*.13,cy+r*.2,r*.98,0,7);
+  ctx.fillStyle="rgba(0,0,0,.32)"; ctx.filter="blur(2px)"; ctx.fill(); ctx.filter="none";
+  const g=ctx.createRadialGradient(cx-r*.35,cy-r*.42,r*.12,cx,cy,r);
+  if(isBlack){ g.addColorStop(0,"#707070"); g.addColorStop(.5,"#232323"); g.addColorStop(1,"#050505"); }
+  else       { g.addColorStop(0,"#ffffff"); g.addColorStop(.6,"#f2ead8"); g.addColorStop(1,"#c7bba1"); }
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fillStyle=g; ctx.fill();
+  ctx.lineWidth=Math.max(.5,r*.06);
+  ctx.strokeStyle=isBlack?"#00000088":"#9a8f7788"; ctx.stroke();
+  if(isDead){
+    ctx.strokeStyle="#d33"; ctx.lineWidth=Math.max(1.2,r*.13);
+    ctx.beginPath(); ctx.moveTo(cx-r*.55,cy-r*.55); ctx.lineTo(cx+r*.55,cy+r*.55); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+const viewBoard = () => (review>=0 && review<history.length) ? history[review].board : board;
+const viewLastMove = () => {
+  if(review>=0 && review<history.length) return playedIndex(review);
+  return history.length ? playedIndex(history.length-1) : -1;
+};
+
+function updatePanel(){
+  document.getElementById("phaseTag").textContent =
+      bot.running        ? "Bot thinking"
+    : review!==-1        ? `Reviewing move ${review+1}`
+    : phase==="score"   ? "Scoring — mark dead stones"
+    : phase==="over"    ? "Game over"
+    : "Playing";
+
+  const isB=toPlay===BLACK;
+  document.getElementById("turn").innerHTML =
+    `<span class="stone" style="background:${isB?"#111":"#f7f2e6"}"></span>`+
+    (isB?"Black":"White")+
+    (bot.running ? ` <span style="color:var(--dim);font-weight:400">thinking… ${bot.plays}</span>` : "");
+  document.getElementById("moveNo").textContent=moveNo;
+  document.getElementById("caps").textContent=`${caps[1]} – ${caps[2]}`;
+  document.getElementById("lastMove").textContent = (()=>{const l=viewLastMove(); return l>=0?dispName(l):"—";})();
+  document.getElementById("komiV").textContent=komi;
+
+  const live=phase==="play" && review===-1 && !bot.running && !isBotTurn();
+  document.getElementById("btnPass").disabled=!live;
+  document.getElementById("btnResign").disabled=!live;
+  document.getElementById("btnCount").hidden=!(phase==="score" && review===-1);
+
+  const list=document.getElementById("moves");
+  if(list.childElementCount!==history.length){
+    list.innerHTML="";
+    history.forEach((h,k)=>{
+      const p=playedIndex(k);
+      const isBlack=h.toPlay===BLACK;
+      const d=document.createElement("div");
+      d.innerHTML=`<span class="n">${k+1}</span>`+
+        `<span class="c">${p<0?'':`<span class="stone" style="background:${isBlack?"#111":"#f7f2e6"}"></span>`}</span>`+
+        `<span>${p<0?"pass":dispName(p)}</span>`;
+      d.onclick=()=>{ review=(review===k?-1:k); render(); };
+      list.appendChild(d);
+    });
+  }
+  [...list.children].forEach((el,k)=>el.classList.toggle("cur", k===(review===-1?history.length-1:review)));
+  if(review===-1) list.scrollTop=list.scrollHeight;
+}
+
+/* ── input ────────────────────────────────────────────────────────────── */
+function pointerToIndex(ev){
+  const r=cv.getBoundingClientRect();
+  const x=(ev.clientX-r.left)/r.width*geo.w, y=(ev.clientY-r.top)/r.height*geo.w;
+  const gx=Math.round((x-geo.pad)/geo.cell), gy=Math.round((y-geo.pad)/geo.cell);
+  return onBoard(gx,gy) ? idx(gx,gy) : -1;
+}
+cv.addEventListener("mousemove",e=>{
+  const i=pointerToIndex(e);
+  if(i!==hover){ hover=i; if(phase!=="over") render(); }
+});
+cv.addEventListener("mouseleave",()=>{ hover=-1; render(); });
+cv.addEventListener("click",e=>{
+  const i=pointerToIndex(e);
+  if(review!==-1){ review=-1; render(); return; }
+  if(phase==="score"){ toggleDead(i); return; }
+  play(i);
+});
+cv.addEventListener("contextmenu",e=>{ e.preventDefault(); undo(); });
+
+document.getElementById("selBot").onchange=e=>{
+  bot.side=+e.target.value;
+  document.getElementById("selLevel").disabled=!bot.side;
+  cancelBot(); afterMove();
+};
+document.getElementById("selLevel").onchange=e=>{ bot.level=+e.target.value; };
+document.getElementById("btnPass").onclick=pass;
+document.getElementById("btnUndo").onclick=undo;
+document.getElementById("btnResign").onclick=resign;
+document.getElementById("btnCount").onclick=countScore;
+document.getElementById("btnSgf").onclick=exportSGF;
+document.getElementById("btnNew").onclick =()=>{ if(confirm("Start a new game?")) newGame(); };
+document.getElementById("btnApply").onclick=()=>{ if(confirm("Restart with these settings?")) newGame(); };
+
+window.addEventListener("keydown",e=>{
+  if(/^(INPUT|SELECT)$/.test(e.target.tagName)) return;
+  if(e.key==="u"||e.key==="U") undo();
+  if(e.key==="p"||e.key==="P") pass();
+  if(e.key==="Enter"&&phase==="score") countScore();
+  if(e.key==="Escape"){
+    if(review!==-1){ review=-1; render(); return; }
+    if(phase==="score"){ phase="play"; dead=new Set();
+      document.getElementById("result").style.display="none"; render(); }
+    else if(phase==="over" && !(outcome&&outcome.resign)){ phase="score";
+      document.getElementById("result").style.display="none"; render(); }
+  }
+});
+window.addEventListener("resize",render);
+
+newGame();
+</script>
+</body>
+</html>
