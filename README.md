@@ -107,6 +107,26 @@ bot-vs-bot game, and that searching leaves the real board untouched.
 returned a constant, so any test that switched the bot on spun in that loop forever.
 It now returns real time.
 
+## Formal verification
+
+`lean/` contains a Lean 4 (v4.34.1, no Mathlib) formalization of the rules engine.
+Everything in `go.html`'s kernel has a counterpart: points and adjacency, flood-fill
+regions as an inductive `Connected` relation, groups, liberties, captures, the
+suicide/ko/superko checks in `illegal`, and Chinese area scoring with the partition
+invariant `stones + territory + neutral = N²` (`scoreOn_partition`). No `sorry`, no
+`native_decide`; the only axioms used are Lean's standard three.
+
+`GoRules/Examples.lean` restates the positions `test.js` checks — captures, chains,
+suicide, ko, superko, the 3×3 dame board, handicap layout distinctness — and proves
+the two 5×5 scores structurally rather than by evaluation: the split board
+(5–5 stones, 10/5/0 territory) and the lone wall (5 stones, 20 territory). Each
+region of those boards is characterised as a set of columns, and only the final
+cheap count is evaluated.
+
+```
+cd lean && lake build
+```
+
 ## Files
 
 | | |
@@ -114,6 +134,7 @@ It now returns real time.
 | `go.html` | The game and the bot. No dependencies, no build. |
 | `harness.js` | Loads `go.html` headlessly and exposes the engine to tests. |
 | `test.js` | The test suite. |
+| `lean/` | Lean 4 formalization of the rules engine (`lake build`). |
 
 ## Known limits
 
