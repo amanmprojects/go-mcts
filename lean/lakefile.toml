@@ -1,0 +1,6 @@
+name = "GoRules"
+version = "0.1.0"
+defaultTargets = ["GoRules"]
+
+[[lean_lib]]
+name = "GoRules"
