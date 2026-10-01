@@ -239,7 +239,10 @@ const defaultKomi = n => ({9:5.5, 13:7.5, 19:7.5}[n] ?? 7.5);
 function syncKomi(){
   document.getElementById("inKomi").value = defaultKomi(+document.getElementById("selSize").value);
 }
-document.getElementById("selSize").onchange=syncKomi;
+document.getElementById("selSize").onchange=()=>{ syncKomi(); markDirty(); };
+document.getElementById("selHc").onchange=markDirty;
+document.getElementById("inKomi").oninput=markDirty;
+function markDirty(){ document.getElementById("btnApply").textContent="Restart to Apply"; }
 
 function newGame(){
   N=+document.getElementById("selSize").value;
@@ -267,6 +270,7 @@ function newGame(){
   seen=new Set([posKey]);
   document.getElementById("result").style.display="none";
   document.getElementById("moves").innerHTML="";
+  document.getElementById("btnApply").textContent="Restart";
   cancelBot();
   afterMove();
 }
@@ -1019,16 +1023,16 @@ cv.addEventListener("contextmenu",e=>{ e.preventDefault(); undo(); });
 document.getElementById("selBot").onchange=e=>{
   bot.side=+e.target.value;
   document.getElementById("selLevel").disabled=!bot.side;
-  cancelBot(); afterMove();
+  cancelBot(); afterMove(); markDirty();
 };
-document.getElementById("selLevel").onchange=e=>{ bot.level=+e.target.value; };
+document.getElementById("selLevel").onchange=e=>{ bot.level=+e.target.value; markDirty(); };
 document.getElementById("btnPass").onclick=pass;
 document.getElementById("btnUndo").onclick=undo;
 document.getElementById("btnResign").onclick=resign;
 document.getElementById("btnCount").onclick=countScore;
 document.getElementById("btnSgf").onclick=exportSGF;
 document.getElementById("btnNew").onclick =()=>{ if(confirm("Start a new game?")) newGame(); };
-document.getElementById("btnApply").onclick=()=>{ if(confirm("Restart with these settings?")) newGame(); };
+document.getElementById("btnApply").onclick=newGame;
 
 window.addEventListener("keydown",e=>{
   if(/^(INPUT|SELECT)$/.test(e.target.tagName)) return;
